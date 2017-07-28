@@ -97,6 +97,58 @@ static void AKFS_Azimuth(
 	*azimuth = AKFS_ATAN2(Yh, Xh);
 }
 
+/*! Calculate the YPR from gravity and magnetic readings
+  @return #AKFS_SUCCESS on success, Otherwise return value is #AKFS_ERROR
+  @param[in] avec
+  @param[in] hvec
+  @param[out] azimuth, radian
+  @param[out] pitch, radian
+  @param[out] roll, radian
+*/
+static int16 AKFS_getOrientation(
+		     const AKFVEC *avec, 
+		     const AKFVEC *hvec,
+		     AKFLOAT *azimuth,
+		     AKFLOAT *pitch,
+		     AKFLOAT *roll)
+{
+
+  AKFLOAT Ax = avec->u.x;
+  AKFLOAT Ay = avec->u.y;
+  AKFLOAT Az = avec->u.z;
+  AKFLOAT Anorm = AKFS_SQRT(Ax*Ax + Ay*Ay + Az*Az);
+
+  if (Anorm < AKFS_EPSILON) {
+    return AKFS_ERROR;
+  }
+
+  AKFLOAT Ex = hvec->u.x;
+  AKFLOAT Ey = hvec->u.y;
+  AKFLOAT Ez = hvec->u.z;
+  AKFLOAT Hx = Ey*Az - Ez*Ay;
+  AKFLOAT Hy = Ez*Ax - Ex*Az;
+  AKFLOAT Hz = Ex*Ay - Ey*Ax;
+  AKFLOAT Hnorm = AKFS_SQRT(Hx*Hx + Hy*Hy + Hz*Hz);
+
+  AKFLOAT invH = 1.0f / Hnorm;
+  Hx *= invH;
+  Hy *= invH;
+  Hz *= invH;
+  AKFLOAT invA = 1.0f / Anorm;
+  Ax *= invA;
+  Ay *= invA;
+  Az *= invA;
+  AKFLOAT Mx = Ay*Hz - Az*Hy;
+  AKFLOAT My = Az*Hx - Ax*Hz;
+  AKFLOAT Mz = Ax*Hy - Ay*Hx;
+
+  *azimuth = AKFS_ATAN2(Hy, My);
+  *pitch = AKFS_ASIN(-Ay);
+  *roll = AKFS_ATAN2(-Ax, Az);
+
+  return AKFS_SUCCESS;
+}
+
 /******************************************************************************/
 /*! Output is DEGREE!
   @return #AKFS_SUCCESS on success. Otherwise the return value is #AKFS_ERROR.
@@ -143,13 +195,10 @@ int16 AKFS_Direction(
 		return AKFS_ERROR;
 	}
 
-	/* calculate pitch and roll */
-	if (AKFS_Angle(&aave, &pitchRad, &rollRad) != AKFS_SUCCESS) {
+	/* calculate azimuth, pitch and roll */
+	if( AKFS_getOrientation(&aave, &have, &azimuthRad, &pitchRad, &rollRad) != AKFS_SUCCESS) {
 		return AKFS_ERROR;
 	}
-
-	/* calculate azimuth */
-	AKFS_Azimuth(&have, pitchRad, rollRad, &azimuthRad);
 
 	*azimuth = RAD2DEG(azimuthRad);
 	*pitch = RAD2DEG(pitchRad);
@@ -162,5 +211,6 @@ int16 AKFS_Direction(
 
 	return AKFS_SUCCESS;
 }
+
 
 
